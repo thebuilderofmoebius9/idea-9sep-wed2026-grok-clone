@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { ChatSSEParser, ProviderError, chatCompletionsURL, streamChat, SessionCredentialStore } from "../src/provider.mjs";
+import {
+  ChatSSEParser, ProviderError, chatCompletionsURL, streamChat, SessionCredentialStore,
+  codexRequest, CODEX_ENDPOINT, CODEX_ORIGINATOR,
+} from "../src/provider.mjs";
 
 const listen = (handler) => new Promise((resolve) => {
   const server = createServer(handler);
@@ -56,9 +59,9 @@ test("an unterminated stream still finishes rather than hanging", () => {
   assert.deepEqual(parser.finish(), [{ kind: "finished" }]);
 });
 
-test("the endpoint is derived per provider kind", () => {
+test("the endpoint follows apiRoot for compatible providers and is pinned for Codex", () => {
   assert.equal(chatCompletionsURL({ apiRoot: "https://api.example.com/v1" }), "https://api.example.com/v1/chat/completions");
-  assert.equal(chatCompletionsURL({ apiRoot: "https://api.example.com/v1/", kind: "codexResponses" }), "https://api.example.com/v1/responses");
+  assert.equal(chatCompletionsURL({ apiRoot: "https://api.example.com/v1/", kind: "codexResponses" }), CODEX_ENDPOINT);
 });
 
 test("an empty or newline-bearing credential never reaches the network", async () => {
@@ -158,4 +161,40 @@ test("the session credential store reports references but never persists values"
   assert.ok(!JSON.stringify(store).includes("sk-secret"), "ค่า credential ต้องไม่ถูก serialize ออกไป");
   store.remove("reference-1");
   assert.equal(store.has("reference-1"), false);
+});
+
+test("the Codex adapter pins its destination, headers and a text-only body", () => {
+  const provider = { kind: "codexResponses", apiRoot: "https://evil.example/v1", modelID: "gpt-5.6-luna" };
+  assert.equal(chatCompletionsURL(provider), CODEX_ENDPOINT, "apiRoot ต้องเปลี่ยนปลายทางของ Codex ไม่ได้");
+  const request = codexRequest({
+    provider, credential: "token-value", accountID: "acct-1", sessionID: "session-1",
+    turns: [
+      { role: "system", content: "ตอบสั้น" },
+      { role: "user", content: "สวัสดี" },
+      { role: "assistant", content: "ครับ" },
+    ],
+  });
+  assert.equal(request.url, CODEX_ENDPOINT);
+  assert.equal(request.headers["chatgpt-account-id"], "acct-1");
+  assert.equal(request.headers.originator, CODEX_ORIGINATOR);
+  assert.equal(request.headers.authorization, "Bearer token-value");
+  assert.equal(request.body.instructions, "ตอบสั้น", "system turn ต้องไปเป็น instructions");
+  assert.deepEqual(request.body.tools, []);
+  assert.equal(request.body.tool_choice, "none");
+  assert.equal(request.body.parallel_tool_calls, false);
+  assert.equal(request.body.store, false);
+  assert.equal(request.body.stream, true);
+  assert.deepEqual(request.body.input.map((item) => item.role), ["user", "assistant"]);
+  assert.equal(request.body.input[0].content[0].type, "input_text");
+  assert.equal(request.body.input[1].content[0].type, "output_text");
+});
+
+test("a session credential store keeps the account id beside the token and forgets both", () => {
+  const store = new SessionCredentialStore();
+  store.set("codex-session:1", "token-value", { accountID: "acct-1" });
+  assert.equal(store.accountFor("codex-session:1"), "acct-1");
+  assert.deepEqual(store.references(), ["codex-session:1"]);
+  store.remove("codex-session:1");
+  assert.equal(store.get("codex-session:1"), undefined);
+  assert.equal(store.accountFor("codex-session:1"), null);
 });

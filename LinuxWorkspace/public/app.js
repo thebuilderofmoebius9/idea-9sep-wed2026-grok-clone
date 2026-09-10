@@ -1091,7 +1091,19 @@ function openProviderSheet(after) {
       loopback.checked = chosen.apiRoot.startsWith("http://");
     });
     const secret = el("input", { type: "password", placeholder: "API key (เก็บในหน่วยความจำเซสชันนี้เท่านั้น)" });
+    // Codex uses a session handed over from an auth file instead of an API key,
+    // so the key field and the API root are locked while it is selected.
+    const codex = el("input", { type: "checkbox" });
+    const codexPath = el("input", { placeholder: "/home/<ผู้ใช้>/.codex/auth.json" });
+    codex.onchange = () => {
+      apiRoot.value = codex.checked ? "https://chatgpt.com/backend-api/codex" : state.snapshot.presets[0].apiRoot;
+      apiRoot.disabled = codex.checked;
+      secret.disabled = codex.checked;
+      if (codex.checked && !model.value) model.value = "gpt-5.6-luna";
+    };
     sheet.append(el("div", { class: "fields" }, [
+      el("label", { class: "check" }, [codex, "ใช้ Codex (ChatGPT) ผ่านไฟล์ auth — สถานะทดลอง"]),
+      field("พาธไฟล์ auth ของ Codex", codexPath),
       field("เทมเพลต", preset), guidance, field("ชื่อที่ใช้เรียก", name),
       field("API root", apiRoot), field("model", model),
       el("label", { class: "check" }, [loopback, "อนุญาต HTTP บน loopback (สำหรับ gateway ในเครื่อง)"]),
@@ -1104,15 +1116,19 @@ function openProviderSheet(after) {
         class: "primary", text: "บันทึก",
         onclick: async () => {
           try {
-            const reference = `provider-${crypto.randomUUID()}`;
+            const imported = codex.checked
+              ? await api("/api/codex-auth", { method: "POST", body: { path: codexPath.value } })
+              : null;
+            const reference = imported?.credentialReference ?? `provider-${crypto.randomUUID()}`;
             const saved = await api("/api/providers", {
               method: "POST",
               body: {
                 name: name.value || "ผู้ให้บริการ", apiRoot: apiRoot.value, modelID: model.value,
-                credentialReference: reference, allowsLoopbackHTTP: loopback.checked, kind: "chatCompletions",
+                credentialReference: reference, allowsLoopbackHTTP: loopback.checked,
+                kind: codex.checked ? "codexResponses" : "chatCompletions",
               },
             });
-            if (secret.value) await api("/api/credentials", { method: "POST", body: { reference: saved.credentialReference, value: secret.value } });
+            if (!codex.checked && secret.value) await api("/api/credentials", { method: "POST", body: { reference: saved.credentialReference, value: secret.value } });
             close();
             await refresh();
             after?.();
@@ -1339,6 +1355,8 @@ function connectEvents() {
 }
 
 (async function boot() {
+  // Installable shell only; failing registration must never block the app.
+  navigator.serviceWorker?.register("/service-worker.js").catch(() => {});
   try {
     await refresh({ keepScroll: false });
     wireDivider($("#divider-left"), "sidebarWidth", { min: 240, max: 400 });

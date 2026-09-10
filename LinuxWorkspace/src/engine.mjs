@@ -96,6 +96,7 @@ export class Engine {
       const text = await streamChat({
         provider,
         credential,
+        accountID: this.#credentials.accountFor?.(provider.credentialReference) ?? null,
         turns: this.#turns(generation),
         signal: controller.signal,
         onEvent: (event) => {

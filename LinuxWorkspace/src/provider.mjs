@@ -117,16 +117,56 @@ export class ChatSSEParser {
   }
 }
 
+/// Fixed destination for the Codex adapter: an edited apiRoot must never be able
+/// to send a ChatGPT session token somewhere else (adapter contract, invariant 4).
+export const CODEX_ENDPOINT = "https://chatgpt.com/backend-api/codex/responses";
+export const CODEX_ORIGINATOR = "botworkspace_linux";
+
 export const chatCompletionsURL = (provider) => {
+  if (provider.kind === "codexResponses") return CODEX_ENDPOINT;
   const root = String(provider.apiRoot).replace(/\/$/, "");
-  return provider.kind === "codexResponses" ? `${root}/responses` : `${root}/chat/completions`;
+  return `${root}/chat/completions`;
 };
+
+/// Text-only wire contract: no hosted tools, nothing stored server-side, and the
+/// system turn is carried as `instructions` because Responses has no system role.
+export function codexRequest({ provider, credential, accountID, turns, sessionID }) {
+  const system = turns.filter((turn) => turn.role === "system").map((turn) => turn.content).join("\n\n");
+  const input = turns.filter((turn) => turn.role !== "system").map((turn) => ({
+    type: "message",
+    role: turn.role,
+    content: [{ type: turn.role === "assistant" ? "output_text" : "input_text", text: turn.content }],
+  }));
+  const headers = {
+    authorization: `Bearer ${credential}`,
+    "content-type": "application/json",
+    accept: "text/event-stream",
+    "OpenAI-Beta": "responses=experimental",
+    originator: CODEX_ORIGINATOR,
+    session_id: sessionID,
+  };
+  if (accountID) headers["chatgpt-account-id"] = accountID;
+  return {
+    url: CODEX_ENDPOINT,
+    headers,
+    body: {
+      model: provider.modelID,
+      instructions: system,
+      input,
+      stream: true,
+      store: false,
+      tools: [],
+      tool_choice: "none",
+      parallel_tool_calls: false,
+    },
+  };
+}
 
 /**
  * Streams one reply. `onEvent` receives { kind: "started" | "delta" | "finished" }.
  * Redirects are refused outright rather than risk forwarding the credential.
  */
-export async function streamChat({ provider, credential, turns, signal, onEvent, timeouts = {} }) {
+export async function streamChat({ provider, credential, accountID, turns, signal, onEvent, timeouts = {} }) {
   const firstEvent = timeouts.firstEvent ?? 30_000;
   const idle = timeouts.idle ?? 60_000;
   const total = timeouts.total ?? 300_000;
@@ -154,17 +194,18 @@ export async function streamChat({ provider, credential, turns, signal, onEvent,
     signal?.removeEventListener("abort", abort);
   };
 
-  const body = provider.kind === "codexResponses"
-    ? { model: provider.modelID, input: turns.map((turn) => ({ role: turn.role, content: turn.content })), stream: true }
-    : { model: provider.modelID, messages: turns, stream: true, n: 1 };
+  const codex = provider.kind === "codexResponses"
+    ? codexRequest({ provider, credential, accountID, turns, sessionID: crypto.randomUUID() })
+    : null;
+  const body = codex ? codex.body : { model: provider.modelID, messages: turns, stream: true, n: 1 };
 
   let response;
   try {
-    response = await fetch(chatCompletionsURL(provider), {
+    response = await fetch(codex ? codex.url : chatCompletionsURL(provider), {
       method: "POST",
       redirect: "manual",
       signal: controller.signal,
-      headers: {
+      headers: codex ? codex.headers : {
         authorization: `Bearer ${credential}`,
         "content-type": "application/json",
         accept: "text/event-stream",
@@ -222,13 +263,17 @@ export async function streamChat({ provider, credential, turns, signal, onEvent,
 /// Session-only credential store. Values live in this process and are never persisted.
 export class SessionCredentialStore {
   #values = new Map();
-  set(reference, value) {
+  #accounts = new Map();
+  /// `accountID` is the non-secret ChatGPT account header for the Codex adapter.
+  set(reference, value, { accountID = null } = {}) {
     if (!reference || typeof value !== "string" || !value) throw new ProviderError("invalidCredential");
     this.#values.set(reference, value);
+    if (accountID) this.#accounts.set(reference, accountID);
   }
   get(reference) { return this.#values.get(reference); }
+  accountFor(reference) { return this.#accounts.get(reference) ?? null; }
   has(reference) { return this.#values.has(reference); }
-  remove(reference) { this.#values.delete(reference); }
+  remove(reference) { this.#values.delete(reference); this.#accounts.delete(reference); }
   /// Only the references are ever reportable; values stay inside this object.
   references() { return [...this.#values.keys()]; }
 }

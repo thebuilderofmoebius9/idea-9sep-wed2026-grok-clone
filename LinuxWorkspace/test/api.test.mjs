@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -393,5 +393,58 @@ test("installing the same bot template twice creates two independent bots", asyn
   assert.notEqual(first.conversation.id, second.conversation.id);
   assert.equal(second.bot.description, template.description);
   assert.equal(first.bot.providerConfigID ?? null, null, "เทมเพลตต้องไม่แถม provider/credential มาให้");
+  await workspace.cleanup();
+});
+
+test("Codex auth import refuses the wrong file and never returns the token", async () => {
+  const workspace = await bootWorkspace();
+  const directory = mkdtempSync(join(tmpdir(), "codex-auth-"));
+  const apiKeyFile = join(directory, "apikey.json");
+  const chatgptFile = join(directory, "chatgpt.json");
+  writeFileSync(apiKeyFile, JSON.stringify({ auth_mode: "apikey", OPENAI_API_KEY: "sk-nope" }));
+  writeFileSync(chatgptFile, JSON.stringify({
+    auth_mode: "chatgpt",
+    tokens: { access_token: "access-value", account_id: "acct-1", refresh_token: "refresh-value" },
+  }));
+  await assert.rejects(() => workspace.call("/api/codex-auth", { method: "POST", body: { path: apiKeyFile } }), /ChatGPT/);
+  await assert.rejects(() => workspace.call("/api/codex-auth", { method: "POST", body: { path: "relative.json" } }), /พาธ/);
+  const imported = await workspace.call("/api/codex-auth", { method: "POST", body: { path: chatgptFile } });
+  assert.ok(imported.credentialReference.startsWith("codex-session:"));
+  assert.equal(imported.persisted, false);
+  assert.equal(imported.endpoint, "https://chatgpt.com/backend-api/codex/responses");
+  assert.ok(!JSON.stringify(imported).includes("access-value"), "ต้องไม่คืนค่า token กลับมา");
+  assert.ok(!JSON.stringify(imported).includes("refresh-value"), "ต้องไม่แตะ refresh token");
+  const snapshot = await workspace.call("/api/snapshot");
+  assert.deepEqual(snapshot.credentialReferences, [imported.credentialReference]);
+  // A Codex session reference must never be accepted by the generic adapter.
+  await assert.rejects(() => workspace.call("/api/providers", {
+    method: "POST",
+    body: {
+      name: "generic", apiRoot: "https://api.example.com/v1", modelID: "x",
+      credentialReference: imported.credentialReference, kind: "chatCompletions",
+    },
+  }));
+  rmSync(directory, { recursive: true, force: true });
+  await workspace.cleanup();
+});
+
+test("the workspace is installable: manifest, icon and a service worker that never caches the API", async () => {
+  const workspace = await bootWorkspace();
+  const manifest = await fetch(`${workspace.base}/manifest.webmanifest`);
+  assert.equal(manifest.status, 200);
+  assert.ok(manifest.headers.get("content-type").startsWith("application/manifest+json"));
+  const parsed = await manifest.json();
+  assert.equal(parsed.display, "standalone");
+  assert.equal(parsed.start_url, "/");
+  assert.ok(parsed.icons.some((icon) => icon.purpose === "maskable"));
+  for (const icon of parsed.icons) {
+    assert.equal((await fetch(`${workspace.base}${icon.src}`)).status, 200, `ไอคอนต้องมีจริง: ${icon.src}`);
+  }
+  const worker = await fetch(`${workspace.base}/service-worker.js`);
+  assert.equal(worker.status, 200);
+  const source = await worker.text();
+  assert.ok(source.includes('url.pathname.startsWith("/api/")'), "service worker ต้องไม่แคชเส้นทาง /api/");
+  const page = await (await fetch(`${workspace.base}/`)).text();
+  assert.ok(page.includes('rel="manifest"'));
   await workspace.cleanup();
 });

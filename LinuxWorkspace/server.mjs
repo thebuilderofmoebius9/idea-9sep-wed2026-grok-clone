@@ -1,21 +1,22 @@
 // Local-only HTTP surface for the Linux workspace. Bound to 127.0.0.1 and dependency-free.
 
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { WorkspaceStore, defaultStoreDirectory } from "./src/store.mjs";
-import { SessionCredentialStore, PROVIDER_PRESETS } from "./src/provider.mjs";
+import { SessionCredentialStore, PROVIDER_PRESETS, CODEX_ENDPOINT } from "./src/provider.mjs";
 import { Engine } from "./src/engine.mjs";
 import { resolveMentions, displayNames, mentionToken } from "./src/mentions.mjs";
 import { nextRun } from "./src/routines.mjs";
-import { uuid, BOT_TEMPLATES } from "./src/domain.mjs";
+import { uuid, BOT_TEMPLATES, makeCodexReference } from "./src/domain.mjs";
 
 const root = fileURLToPath(new URL("./public/", import.meta.url));
 const port = Number(process.env.PORT ?? 4173);
 const types = {
   ".css": "text/css", ".html": "text/html", ".js": "text/javascript",
   ".svg": "image/svg+xml", ".json": "application/json",
+  ".webmanifest": "application/manifest+json",
 };
 
 const store = new WorkspaceStore({ directory: process.env.BOTWORKSPACE_HOME ?? defaultStoreDirectory() });
@@ -255,6 +256,34 @@ async function handleAPI(request, response, url) {
     // Session only: the value is held in this process and never written to the workspace file.
     credentials.set(body.reference, body.value);
     return json(response, 200, { reference: body.reference, stored: true, persisted: false });
+  }
+  if (key === "POST /api/codex-auth") {
+    // Explicit handoff only: the user names one Codex auth file, we read the two
+    // fields the adapter needs and keep them in memory. The file is never copied
+    // or modified, the refresh token is never touched, and no value is returned.
+    const file = String(body.path ?? "");
+    if (!file.startsWith("/")) throw Object.assign(new Error("ต้องระบุพาธเต็มของไฟล์ auth ของ Codex"), { status: 400 });
+    const info = await stat(file);
+    if (!info.isFile() || info.size > 256 * 1024) {
+      throw Object.assign(new Error("ไฟล์ auth ไม่ถูกต้องหรือใหญ่เกินกำหนด"), { status: 400 });
+    }
+    let parsed;
+    try { parsed = JSON.parse(await readFile(file, "utf8")); }
+    catch { throw Object.assign(new Error("อ่านไฟล์ auth ไม่สำเร็จ"), { status: 400 }); }
+    if (parsed?.auth_mode !== "chatgpt") {
+      throw Object.assign(new Error("รองรับเฉพาะ auth.json แบบ ChatGPT ของ Codex"), { status: 400 });
+    }
+    const token = parsed?.tokens?.access_token;
+    const accountID = parsed?.tokens?.account_id ?? null;
+    if (typeof token !== "string" || !token || /[\n\r\0]/.test(token)) {
+      throw Object.assign(new Error("ไม่พบ access token ที่ใช้ได้ในไฟล์ auth"), { status: 400 });
+    }
+    const reference = makeCodexReference();
+    credentials.set(reference, token, { accountID });
+    return json(response, 200, {
+      credentialReference: reference, endpoint: CODEX_ENDPOINT,
+      accountIDPresent: Boolean(accountID), persisted: false, experimental: true,
+    });
   }
   if (method === "DELETE" && segments[1] === "credentials" && segments.length === 3) {
     credentials.remove(decodeURIComponent(segments[2]));

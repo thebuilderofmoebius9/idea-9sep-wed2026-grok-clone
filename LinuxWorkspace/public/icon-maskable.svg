@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="BotWorkspace">
+  <rect width="512" height="512" fill="#0f1115"/>
+  <circle cx="256" cy="256" r="108" fill="none" stroke="#7ee0a1" stroke-width="24"/>
+  <circle cx="256" cy="256" r="36" fill="#7ee0a1"/>
+</svg>
