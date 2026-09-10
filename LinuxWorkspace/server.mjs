@@ -9,7 +9,7 @@ import { SessionCredentialStore, PROVIDER_PRESETS } from "./src/provider.mjs";
 import { Engine } from "./src/engine.mjs";
 import { resolveMentions, displayNames, mentionToken } from "./src/mentions.mjs";
 import { nextRun } from "./src/routines.mjs";
-import { uuid } from "./src/domain.mjs";
+import { uuid, BOT_TEMPLATES } from "./src/domain.mjs";
 
 const root = fileURLToPath(new URL("./public/", import.meta.url));
 const port = Number(process.env.PORT ?? 4173);
@@ -111,8 +111,12 @@ function buildReview(input) {
 }
 
 const routes = {
-  "GET /api/snapshot": () => ({ ...store.snapshot(), credentialReferences: credentials.references(), presets: PROVIDER_PRESETS }),
+  "GET /api/snapshot": () => ({
+    ...store.snapshot(), credentialReferences: credentials.references(),
+    presets: PROVIDER_PRESETS, botTemplates: BOT_TEMPLATES,
+  }),
   "GET /api/presets": () => PROVIDER_PRESETS,
+  "GET /api/bot-templates": () => BOT_TEMPLATES,
 };
 
 async function handleAPI(request, response, url) {
@@ -280,6 +284,9 @@ async function handleAPI(request, response, url) {
   }
   if (method === "POST" && segments[1] === "routines" && segments[3] === "delete") {
     return json(response, 200, { revision: store.deleteRoutine(body.expected) });
+  }
+  if (method === "POST" && segments[1] === "routines" && segments[3] === "run") {
+    return json(response, 200, await engine.runRoutineNow(segments[2], body.now ?? Date.now()));
   }
   if (key === "POST /api/routines/tick") {
     return json(response, 200, { started: await engine.tickRoutines(body.now ?? Date.now()) });

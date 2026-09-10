@@ -343,3 +343,55 @@ test("live events are pushed over SSE while a reply streams", async () => {
   await workspace.cleanup();
   await provider.close();
 });
+
+test("run-now starts an extra routine run without moving the next scheduled run", async () => {
+  const provider = await fakeProvider();
+  const workspace = await bootWorkspace();
+  const saved = await workspace.call("/api/providers", {
+    method: "POST",
+    body: {
+      name: "local", apiRoot: `http://127.0.0.1:${provider.port}/v1`, modelID: "test-model",
+      credentialReference: "reference-run-now", allowsLoopbackHTTP: true,
+    },
+  });
+  await workspace.call("/api/credentials", { method: "POST", body: { reference: saved.credentialReference, value: "sk-test" } });
+  const created = await workspace.call("/api/bots", { method: "POST", body: { name: "Nova" } });
+  await workspace.call(`/api/bots/${created.bot.id}/provider`, { method: "POST", body: { providerConfigID: saved.id } });
+  const routine = await workspace.call("/api/routines", {
+    method: "POST",
+    body: {
+      ownerBotID: created.bot.id, name: "สรุปเช้า", prompt: "รันมือ",
+      trigger: { type: "interval", minutes: 60 }, timezoneID: "Asia/Bangkok", enabled: true,
+    },
+  });
+  const started = await workspace.call(`/api/routines/${routine.id}/run`, { method: "POST", body: {} });
+  assert.equal(started.status, "running");
+  const run = await waitFor(async () => {
+    const runs = await workspace.call(`/api/routines/${routine.id}/runs`);
+    return runs.find((item) => item.id === started.id && item.status === "succeeded");
+  }, "รอบที่สั่งรันเองสำเร็จ");
+  assert.equal(run.skippedCount, 0, "การสั่งรันเองไม่ใช่รอบที่พลาด");
+  const after = await workspace.call("/api/snapshot");
+  assert.equal(
+    after.routines.find((item) => item.id === routine.id).nextRunAt,
+    routine.nextRunAt,
+    "สั่งรันเองต้องไม่เลื่อนรอบตามตารางถัดไป");
+  const page = await workspace.call(`/api/messages?conversationID=${created.conversation.id}`);
+  assert.ok(page.messages.some((message) => message.text === "ตอบ: รันมือ"));
+  await workspace.cleanup();
+  await provider.close();
+});
+
+test("installing the same bot template twice creates two independent bots", async () => {
+  const workspace = await bootWorkspace();
+  const templates = (await workspace.call("/api/snapshot")).botTemplates;
+  assert.ok(templates.length >= 4);
+  const template = templates[0];
+  const first = await workspace.call("/api/bots", { method: "POST", body: { ...template, id: undefined } });
+  const second = await workspace.call("/api/bots", { method: "POST", body: { ...template, id: undefined } });
+  assert.notEqual(first.bot.id, second.bot.id);
+  assert.notEqual(first.conversation.id, second.conversation.id);
+  assert.equal(second.bot.description, template.description);
+  assert.equal(first.bot.providerConfigID ?? null, null, "เทมเพลตต้องไม่แถม provider/credential มาให้");
+  await workspace.cleanup();
+});

@@ -1,7 +1,7 @@
 // Generation dispatch and the awake-only routine scheduler.
 // Nothing here fabricates a reply: an unconfigured provider fails the generation honestly.
 
-import { TERMINAL_STATES } from "./domain.mjs";
+import { TERMINAL_STATES, fail } from "./domain.mjs";
 import { PROVIDER_ERRORS, ProviderError, streamChat } from "./provider.mjs";
 import { dueWindow, nextRun, occurrenceID, routineFailureLabel } from "./routines.mjs";
 
@@ -177,29 +177,47 @@ export class Engine {
       const occurrence = occurrenceID(routine.scheduleID, window.latest, routine.trigger, routine.timezoneID);
       const run = this.#store.claimRoutineRun({ routine, window, occurrence });
       if (!run) continue;
-
-      const bot = this.#store.bot(routine.ownerBotID);
-      const conversation = this.#store.snapshot().conversations
-        .find((item) => item.kind === "direct" && item.memberBotIDs[0] === routine.ownerBotID);
-      if (!bot || !conversation) {
-        this.#store.finishRoutineRun(run.id, "failed", routineFailureLabel("missingBot"));
-        continue;
-      }
-      const committed = this.#store.beginGenerationRound({
-        conversationID: conversation.id,
-        text: routine.prompt,
-        targets: [{ targetBotID: bot.id }],
-        routineRunID: run.id,
-      });
-      this.#store.attachRoutineRunGeneration(run.id, {
-        generationID: committed.generations[0].id,
-        conversationID: conversation.id,
-      });
-      started.push(run.id);
-      this.#emit({ type: "revision", revision: this.#store.revision });
-      this.run(committed.generations[0].id).catch(() => {});
+      if (this.#startRoutineRun(routine, run)) started.push(run.id);
     }
     return started;
+  }
+
+  /// Run-now: a manual occurrence that never moves the schedule watermark,
+  /// so the next scheduled run still fires at its planned time.
+  async runRoutineNow(routineID, now = Date.now()) {
+    const routine = this.#store.routine(routineID) ?? fail("missingRecord");
+    const window = {
+      latest: now, next: routine.nextRunAt,
+      skippedCount: 0, firstSkippedAt: null, lastSkippedAt: null,
+    };
+    const occurrence = `${routine.scheduleID}:manual-${now.toString(16)}`;
+    const run = this.#store.claimRoutineRun({ routine, window, occurrence });
+    if (!run) fail("duplicateRun");
+    this.#startRoutineRun(routine, run);
+    return this.#store.routineRuns({ routineID }).find((item) => item.id === run.id) ?? run;
+  }
+
+  #startRoutineRun(routine, run) {
+    const bot = this.#store.bot(routine.ownerBotID);
+    const conversation = this.#store.snapshot().conversations
+      .find((item) => item.kind === "direct" && item.memberBotIDs[0] === routine.ownerBotID);
+    if (!bot || !conversation) {
+      this.#store.finishRoutineRun(run.id, "failed", routineFailureLabel("missingBot"));
+      return false;
+    }
+    const committed = this.#store.beginGenerationRound({
+      conversationID: conversation.id,
+      text: routine.prompt,
+      targets: [{ targetBotID: bot.id }],
+      routineRunID: run.id,
+    });
+    this.#store.attachRoutineRunGeneration(run.id, {
+      generationID: committed.generations[0].id,
+      conversationID: conversation.id,
+    });
+    this.#emit({ type: "revision", revision: this.#store.revision });
+    this.run(committed.generations[0].id).catch(() => {});
+    return true;
   }
 }
 

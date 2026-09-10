@@ -27,10 +27,11 @@ bots), server-side persistence with drafts and keyset-paginated messages,
 provider settings for OpenAI-compatible endpoints with streamed replies, the
 review-then-confirm send flow with ordered group rounds and identity-safe
 mentions, Stop/Retry/cancel of generations, attachments (upload, download,
-export-safe listing), routines with next-run scheduling, single-claim ticks and
-run history, unread/read state, preferences, deletion plans and JSON export.
+export-safe listing), routines with next-run scheduling, single-claim ticks,
+run-now and run history, a local bot template catalog, unread/read state,
+preferences, deletion plans and JSON export.
 
-Verified by the offline test suite (64 tests) and by local fixture endpoints;
+Verified by the offline test suite (66 tests) and by local fixture endpoints;
 no live third-party provider has been validated.
 
 Not ported: migration from the macOS Core Data store (different storage engine,

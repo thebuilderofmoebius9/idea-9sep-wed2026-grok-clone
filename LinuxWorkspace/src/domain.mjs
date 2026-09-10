@@ -4,6 +4,28 @@
 export const AVATAR_SHAPES = ["circle", "square", "drop", "capsule"];
 export const AVATAR_COLORS = ["green", "magenta", "gray", "violet", "blue", "orange"];
 export const PROVIDER_KINDS = ["chatCompletions", "codexResponses"];
+
+/// Local starter catalog. Installing a template only prefills a normal bot
+/// creation, so every install is an independent bot with its own id, its own
+/// conversation and no shared credential.
+export const BOT_TEMPLATES = [
+  {
+    id: "assistant", name: "ผู้ช่วยทั่วไป", shape: "circle", color: "green",
+    description: "ตอบสั้น ตรงคำถาม ถ้าไม่รู้ให้บอกว่าไม่รู้และเสนอสิ่งที่ต้องตรวจต่อ",
+  },
+  {
+    id: "reviewer", name: "ผู้ตรวจโค้ด", shape: "square", color: "violet",
+    description: "อ่าน diff แล้วชี้บั๊ก ความเสี่ยง และจุดที่ทำให้ง่ายกว่านี้ได้ อ้างบรรทัดที่เกี่ยวข้องเสมอ",
+  },
+  {
+    id: "writer", name: "นักเขียน", shape: "drop", color: "magenta",
+    description: "เรียบเรียงข้อความให้อ่านง่าย รักษาความหมายเดิม ไม่เติมข้อมูลที่ไม่มีในต้นฉบับ",
+  },
+  {
+    id: "researcher", name: "นักค้นข้อมูล", shape: "capsule", color: "blue",
+    description: "สรุปประเด็นเป็นข้อ ๆ แยกข้อเท็จจริงออกจากการตีความ และบอกสิ่งที่ยังไม่รู้",
+  },
+];
 export const GENERATION_STATES = [
   "queued", "connecting", "streaming", "completed", "failed", "cancelled", "interrupted",
 ];

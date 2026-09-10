@@ -418,6 +418,16 @@ function renderInspector() {
       ])),
       el("div", { class: "row" }, [
         el("button", { class: "ghost", text: "แก้ไข", onclick: () => openRoutineEditor(routine) }),
+        el("button", {
+          class: "ghost", text: "รันเดี๋ยวนี้",
+          onclick: async () => {
+            try {
+              await api(`/api/routines/${routine.id}/run`, { method: "POST", body: {} });
+              toast("เริ่มรัน routine แล้ว");
+              await refresh();
+            } catch (error) { toast(error.message, { error: true }); }
+          },
+        }),
         el("button", { class: "ghost", text: "ประวัติ", onclick: () => openRoutineHistory(routine) }),
         el("button", { class: "ghost", text: "ลบ", onclick: () => confirmRoutineDeletion(routine) }),
       ]),
@@ -633,9 +643,27 @@ function openBotCreator() {
     const description = el("textarea", { rows: "3", placeholder: "บทบาทและวิธีทำงาน (ใช้เป็น system prompt)" });
     const color = { value: "green" };
     const shape = el("select", {}, ["circle", "square", "drop", "capsule"].map((value) => el("option", { value, text: value })));
+    const templates = state.snapshot?.botTemplates ?? [];
+    // A template only prefills these fields; the bot itself is created by the
+    // normal path, so two installs are two independent bots.
+    const template = el("select", {}, [
+      el("option", { value: "", text: "เริ่มจากศูนย์" }),
+      ...templates.map((item) => el("option", { value: item.id, text: item.name })),
+    ]);
+    template.onchange = () => {
+      const chosen = templates.find((item) => item.id === template.value);
+      if (!chosen) return;
+      name.value = chosen.name;
+      description.value = chosen.description;
+      shape.value = chosen.shape;
+      color.value = chosen.color;
+      [...colorRow.children].forEach((child) => child.setAttribute("aria-pressed", String(child.getAttribute("aria-label") === chosen.color)));
+    };
+    const colorRow = swatches(color);
     sheet.append(el("div", { class: "fields" }, [
+      field("เทมเพลตเริ่มต้น", template),
       field("ชื่อ", name), field("คำอธิบาย", description),
-      field("รูปทรงอวาตาร", shape), el("div", {}, ["สีอวาตาร", swatches(color)]),
+      field("รูปทรงอวาตาร", shape), el("div", {}, ["สีอวาตาร", colorRow]),
     ]));
     sheet.append(el("div", { class: "actions" }, [
       el("button", { class: "secondary", text: "ยกเลิก", onclick: close }),
