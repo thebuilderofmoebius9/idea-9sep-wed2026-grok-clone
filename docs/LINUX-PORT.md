@@ -9,10 +9,12 @@ npm test
 npm start
 ```
 
-Then open the printed local URL. Bots, conversations and drafts in this first
-slice are stored with browser local storage. It deliberately does not import a
-provider credential, call a remote API, or claim compatibility with the macOS
-Core Data store.
+Then open the printed local URL. The workspace persists server-side in a
+`workspace.json` file (atomic writes) under `$BOTWORKSPACE_HOME`, falling back
+to `~/.local/share/botworkspace-linux`; attachments live in a sibling
+`attachments/` directory. Provider credentials are session-only: the key value
+is held in the server process and never written to the workspace file, export,
+or disk — only its reference is stored.
 
 The original SwiftUI/AppKit implementation remains under `Packages/` and
 `Prototypes/` as the macOS reference. It cannot run on Linux because it depends
@@ -20,8 +22,17 @@ on Apple-only frameworks (AppKit, SwiftUI, Core Data and Security).
 
 ## Port boundary
 
-Included now: local UI, teammate creation, conversation creation, message
-drafting and local persistence.
+Included now: local UI (bots, groups, direct chats, search including hidden
+bots), server-side persistence with drafts and keyset-paginated messages,
+provider settings for OpenAI-compatible endpoints with streamed replies, the
+review-then-confirm send flow with ordered group rounds and identity-safe
+mentions, Stop/Retry/cancel of generations, attachments (upload, download,
+export-safe listing), routines with next-run scheduling, single-claim ticks and
+run history, unread/read state, preferences, deletion plans and JSON export.
 
-Not yet ported: provider streaming, group rounds, attachments, routines,
-exports, native credential storage and migration from the macOS database.
+Verified by the offline test suite (64 tests) and by local fixture endpoints;
+no live third-party provider has been validated.
+
+Not ported: migration from the macOS Core Data store (different storage engine,
+no importer), native accessibility flows (browser accessibility applies), and
+live-provider validation beyond OpenAI-compatible chat-completions fixtures.

@@ -3,7 +3,9 @@
 ## Linux fork
 
 This fork now includes a runnable Linux workspace in [`LinuxWorkspace`](LinuxWorkspace).
-It is a local Node/browser application with no third-party packages; see the
+It is a local Node/browser application with no third-party packages: bots, groups,
+drafts, attachments, routines, exports and streamed replies from OpenAI-compatible
+endpoints, with session-only credentials and a review-then-confirm send flow; see the
 [Linux port boundary](docs/LINUX-PORT.md). The original SwiftUI/AppKit app below
 remains the macOS reference implementation.
 

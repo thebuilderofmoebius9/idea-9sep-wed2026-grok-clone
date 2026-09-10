@@ -1,9 +1,100 @@
 <!doctype html>
-<html lang="th">
-  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BotWorkspace Linux</title><link rel="stylesheet" href="style.css"></head>
+<html lang="th" data-appearance="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>BotWorkspace Linux</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
   <body>
-    <aside><header><span class="mark">◈</span><div><b>BotWorkspace</b><small>Linux workspace</small></div></header><button id="new-chat" class="primary">＋ บทสนทนาใหม่</button><section><div class="label">บทสนทนา</div><nav id="conversation-list"></nav></section><section><div class="label">AI teammates <button id="new-bot" aria-label="เพิ่มบอท">＋</button></div><ul id="bot-list"></ul></section></aside>
-    <main><header class="chat-header"><div><h1 id="title"></h1><small>ข้อมูลเก็บอยู่ในเบราว์เซอร์เครื่องนี้</small></div><span class="offline">ยังไม่ได้เชื่อมผู้ให้บริการ</span></header><div id="messages"></div><form id="send-form"><textarea id="composer" placeholder="พิมพ์ข้อความ…" rows="2"></textarea><button class="primary" type="submit">ส่ง</button></form></main>
+    <div id="layout">
+      <aside id="sidebar" aria-label="แถบข้าง">
+        <header class="brand">
+          <span class="mark" aria-hidden="true">◈</span>
+          <div><b>BotWorkspace</b><small>Linux workspace</small></div>
+          <button id="open-settings" class="ghost" title="ตั้งค่า" aria-label="ตั้งค่า">⚙</button>
+        </header>
+        <div class="row">
+          <input id="search" type="search" placeholder="ค้นหาบทสนทนา" aria-label="ค้นหาบทสนทนา">
+        </div>
+        <div class="row">
+          <button id="new-chat" class="primary">＋ บทสนทนาใหม่</button>
+          <button id="new-group" class="secondary">กลุ่ม</button>
+        </div>
+        <section>
+          <div class="label">บทสนทนา</div>
+          <nav id="conversation-list" aria-label="รายการบทสนทนา"></nav>
+        </section>
+        <section>
+          <div class="label">AI teammates <button id="new-bot" class="ghost" aria-label="เพิ่มบอท">＋</button></div>
+          <ul id="bot-list"></ul>
+          <label class="check"><input type="checkbox" id="show-hidden"> แสดงบอทที่ซ่อนไว้</label>
+        </section>
+      </aside>
+
+      <div id="divider-left" class="divider" role="separator" aria-orientation="vertical" tabindex="0"
+           aria-label="ปรับความกว้างแถบข้าง"></div>
+
+      <main id="chat">
+        <header class="chat-header">
+          <div>
+            <h1 id="chat-title">—</h1>
+            <small id="chat-subtitle"></small>
+          </div>
+          <div class="header-actions">
+            <span id="provider-state" class="pill"></span>
+            <button id="edit-conversation" class="ghost" title="แก้โปรไฟล์">แก้ไข</button>
+            <button id="toggle-inspector" class="ghost" title="สลับ inspector">☰</button>
+          </div>
+        </header>
+
+        <div id="messages" tabindex="0" aria-label="บทสนทนา"></div>
+
+        <div id="round-status" hidden></div>
+
+        <form id="composer-form">
+          <div id="reply-card" hidden>
+            <div>
+              <small>ตอบกลับ</small>
+              <p id="reply-excerpt"></p>
+            </div>
+            <button type="button" id="cancel-reply" class="ghost" aria-label="ยกเลิกการตอบกลับ">✕</button>
+          </div>
+          <div id="recipients" hidden>
+            <div class="label">ผู้รับตามลำดับ <span id="recipient-source"></span></div>
+            <ol id="recipient-list"></ol>
+          </div>
+          <div id="attachment-strip" hidden></div>
+          <div class="composer-row">
+            <textarea id="composer" rows="2" placeholder="พิมพ์ข้อความ… (Enter ส่ง, Shift+Enter ขึ้นบรรทัดใหม่)"
+                      aria-label="ช่องพิมพ์ข้อความ"></textarea>
+            <div class="composer-actions">
+              <button type="button" id="mention" class="ghost" title="แทรก mention">@</button>
+              <label class="ghost file" title="แนบไฟล์">📎<input type="file" id="file-input" multiple hidden></label>
+              <button type="submit" class="primary" id="send">ส่ง</button>
+            </div>
+          </div>
+          <small id="composer-hint"></small>
+        </form>
+      </main>
+
+      <div id="divider-right" class="divider" role="separator" aria-orientation="vertical" tabindex="0"
+           aria-label="ปรับความกว้าง inspector"></div>
+
+      <aside id="inspector" aria-label="inspector">
+        <div class="label">คอมพิวเตอร์</div>
+        <p class="muted small">ยังไม่ได้เชื่อม adapter — แผงนี้เป็นสถานะตัดการเชื่อมต่อตามสัญญาออกแบบ ไม่ใช่เครื่องจริงบนคลาวด์</p>
+        <div class="label">Routine <button id="new-routine" class="ghost" aria-label="เพิ่ม routine">＋</button></div>
+        <div id="routine-list"></div>
+        <div class="label">ไฟล์ในบทสนทนา</div>
+        <div id="inspector-files" class="muted small">—</div>
+      </aside>
+    </div>
+
+    <div id="overlay" hidden></div>
+    <div id="sheet-host" hidden role="dialog" aria-modal="true" aria-labelledby="sheet-title"></div>
+    <div id="toast" hidden role="status" aria-live="polite"></div>
+
     <script type="module" src="app.js"></script>
   </body>
 </html>
