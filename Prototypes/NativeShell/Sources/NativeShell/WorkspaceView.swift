@@ -150,11 +150,22 @@ private struct SidebarView: View {
   @FocusState private var searchFocused: Bool
   var body: some View {
     VStack(spacing: 0) {
-      HStack {
-        Spacer()
-        ShellIconButton(symbol: "plus", label: "New chat") { store.openPicker() }
-          .accessibilityIdentifier("new-chat")
-      }.padding(.horizontal, 15).frame(height: 52)
+      HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 1) {
+          Text("BotWorkspace").font(.system(size: 17, weight: .semibold))
+          Text("Your AI teammates").font(.system(size: 11)).foregroundStyle(ShellTheme.secondary)
+        }
+        Spacer(minLength: 0)
+        Button {
+          store.openPicker()
+        } label: {
+          Label("New chat", systemImage: "plus")
+            .font(.system(size: 13, weight: .medium))
+            .padding(.horizontal, 10).frame(height: 32)
+            .background(ShellTheme.selected, in: Capsule())
+        }
+        .buttonStyle(.plain).accessibilityIdentifier("new-chat")
+      }.padding(.horizontal, 15).frame(height: 58)
 
       HStack(spacing: 7) {
         Image(systemName: "magnifyingglass").foregroundStyle(ShellTheme.secondary)
@@ -362,7 +373,14 @@ private struct ConversationView: View {
       } else if let bot = store.currentBot {
         BotAvatar(color: bot.color, shape: bot.shape, size: 26)
       }
-      Text(store.current?.title ?? "Bot Workspace").font(.system(size: 16, weight: .medium))
+      VStack(alignment: .leading, spacing: 2) {
+        Text(store.current?.title ?? "Bot Workspace").font(.system(size: 16, weight: .medium))
+        if let conversation = store.current {
+          Text(conversationStatus(for: conversation))
+            .font(.system(size: 11)).foregroundStyle(ShellTheme.secondary).lineLimit(1)
+            .accessibilityIdentifier("conversation-status")
+        }
+      }
       Spacer()
       if let conversation = store.current {
         ShellIconButton(
@@ -390,7 +408,16 @@ private struct ConversationView: View {
         store.inspectorPreferred.toggle()
       }
       .accessibilityIdentifier("toggle-inspector")
-    }.padding(.horizontal, 18).frame(height: 52)
+    }.padding(.horizontal, 18).frame(height: 58)
+  }
+
+  private func conversationStatus(for conversation: PreviewConversation) -> String {
+    let recipient = conversation.kind == .group
+      ? "Group · \(conversation.memberIDs.count) teammates"
+      : "Direct conversation"
+    guard store.isPersistent else { return "\(recipient) · Sample workspace" }
+    guard let provider = store.selectedProvider else { return "\(recipient) · No provider selected" }
+    return "\(recipient) · \(provider.name)"
   }
 
   private func transcript(_ conversation: PreviewConversation) -> some View {
