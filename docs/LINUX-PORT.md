@@ -31,7 +31,7 @@ export-safe listing), routines with next-run scheduling, single-claim ticks,
 run-now and run history, a local bot template catalog, unread/read state,
 preferences, deletion plans and JSON export.
 
-Verified by the offline test suite (70 tests) and by local fixture endpoints;
+Verified by the offline test suite (71 tests, run on Node 18 and Node 22) and by local fixture endpoints;
 no live third-party provider has been validated.
 
 The workspace is installable: it ships a web app manifest, icons and a
@@ -43,8 +43,9 @@ and browser install/keyboard/zoom behaviour covers the R09 quality matrix.
 The Codex adapter is wired to the real ChatGPT Codex endpoint. An explicit
 `POST /api/codex-auth { path }` reads one user-named Codex `auth.json`, accepts
 only `auth_mode: "chatgpt"`, and keeps `access_token` plus `account_id` in the
-session credential store under a `codex-session:` reference. The refresh token
-is never read back or used, the auth file is never copied or modified, the
+session credential store under a `codex-session:` reference. Re-importing into the reference an existing provider already holds is supported,
+because a restart empties the session store while the provider record survives.
+The refresh token is never read back or used, the auth file is never copied or modified, the
 destination host is pinned regardless of `apiRoot`, and the request is
 text-only (`tools: []`, `tool_choice: "none"`, `parallel_tool_calls: false`,
 `store: false`). It is experimental: it proves one account works, not an

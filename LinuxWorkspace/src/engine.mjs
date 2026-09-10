@@ -115,6 +115,7 @@ export class Engine {
             ? "ยังไม่ได้ใส่ credential ของผู้ให้บริการในเซสชันนี้"
             : error.message)
         : "เกิดข้อผิดพลาดที่ไม่คาดคิดระหว่างเรียกผู้ให้บริการ";
+      if (!(error instanceof ProviderError)) console.error("generation failed", error);
       this.#apply({ generationID, attemptID: generation.attemptID, kind: "failed", error: message });
       if (generation.routineRunID) {
         this.#store.finishRoutineRun(generation.routineRunID, "failed",

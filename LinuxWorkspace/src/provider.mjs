@@ -1,3 +1,5 @@
+import { uuid } from "./domain.mjs";
+
 // Streaming chat provider, ported from ChatProvider/ChatCompletionsProvider/ChatSSEParser.swift.
 // Credentials are supplied per request by the caller and are never written to the workspace.
 
@@ -130,7 +132,7 @@ export const chatCompletionsURL = (provider) => {
 
 /// Text-only wire contract: no hosted tools, nothing stored server-side, and the
 /// system turn is carried as `instructions` because Responses has no system role.
-export function codexRequest({ provider, credential, accountID, turns, sessionID }) {
+export function codexRequest({ provider, credential, accountID, turns, sessionID = uuid() }) {
   const system = turns.filter((turn) => turn.role === "system").map((turn) => turn.content).join("\n\n");
   const input = turns.filter((turn) => turn.role !== "system").map((turn) => ({
     type: "message",
@@ -195,7 +197,7 @@ export async function streamChat({ provider, credential, accountID, turns, signa
   };
 
   const codex = provider.kind === "codexResponses"
-    ? codexRequest({ provider, credential, accountID, turns, sessionID: crypto.randomUUID() })
+    ? codexRequest({ provider, credential, accountID, turns })
     : null;
   const body = codex ? codex.body : { model: provider.modelID, messages: turns, stream: true, n: 1 };
 

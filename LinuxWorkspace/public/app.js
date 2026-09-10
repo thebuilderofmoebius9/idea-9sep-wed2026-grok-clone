@@ -1139,7 +1139,34 @@ function openProviderSheet(after) {
   });
 }
 
+/// After a restart the Codex session is empty again; re-import into the same
+/// reference so the saved provider keeps working without being recreated.
+function askCodexAuth(provider, after) {
+  openSheet(`ไฟล์ auth ของ ${provider.name}`, (sheet, close) => {
+    const path = el("input", { value: "", placeholder: "/home/<ผู้ใช้>/.codex/auth.json" });
+    sheet.append(el("div", { class: "fields" }, [
+      field("พาธไฟล์ auth ของ Codex", path),
+      el("p", { class: "small", text: "อ่านเฉพาะ access token กับ account id เก็บไว้ในหน่วยความจำเซสชันนี้ ไม่แตะ refresh token และไม่แก้ไฟล์ต้นทาง" }),
+    ]));
+    sheet.append(el("div", { class: "actions" }, [
+      el("button", { class: "secondary", text: "ยกเลิก", onclick: close }),
+      el("button", {
+        class: "primary", text: "นำเข้า",
+        onclick: async () => {
+          try {
+            await api("/api/codex-auth", { method: "POST", body: { path: path.value, reference: provider.credentialReference } });
+            close();
+            await refresh();
+            after?.();
+          } catch (error) { toast(error.message, { error: true }); }
+        },
+      }),
+    ]));
+  });
+}
+
 function askCredential(provider, after) {
+  if (provider.kind === "codexResponses") return askCodexAuth(provider, after);
   openSheet(`credential ของ ${provider.name}`, (sheet, close) => {
     const secret = el("input", { type: "password", placeholder: "API key" });
     sheet.append(el("div", { class: "fields" }, [

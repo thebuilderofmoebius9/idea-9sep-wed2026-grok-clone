@@ -9,7 +9,7 @@ import { SessionCredentialStore, PROVIDER_PRESETS, CODEX_ENDPOINT } from "./src/
 import { Engine } from "./src/engine.mjs";
 import { resolveMentions, displayNames, mentionToken } from "./src/mentions.mjs";
 import { nextRun } from "./src/routines.mjs";
-import { uuid, BOT_TEMPLATES, makeCodexReference } from "./src/domain.mjs";
+import { uuid, BOT_TEMPLATES, makeCodexReference, isCodexReference } from "./src/domain.mjs";
 
 const root = fileURLToPath(new URL("./public/", import.meta.url));
 const port = Number(process.env.PORT ?? 4173);
@@ -278,7 +278,9 @@ async function handleAPI(request, response, url) {
     if (typeof token !== "string" || !token || /[\n\r\0]/.test(token)) {
       throw Object.assign(new Error("ไม่พบ access token ที่ใช้ได้ในไฟล์ auth"), { status: 400 });
     }
-    const reference = makeCodexReference();
+    // Re-importing into the reference an existing provider already points at is
+    // what a restart needs: the session is empty again but the record is intact.
+    const reference = isCodexReference(body.reference) ? body.reference : makeCodexReference();
     credentials.set(reference, token, { accountID });
     return json(response, 200, {
       credentialReference: reference, endpoint: CODEX_ENDPOINT,

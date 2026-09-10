@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
 import {
   ChatSSEParser, ProviderError, chatCompletionsURL, streamChat, SessionCredentialStore,
   codexRequest, CODEX_ENDPOINT, CODEX_ORIGINATOR,
@@ -197,4 +198,13 @@ test("a session credential store keeps the account id beside the token and forge
   store.remove("codex-session:1");
   assert.equal(store.get("codex-session:1"), undefined);
   assert.equal(store.accountFor("codex-session:1"), null);
+});
+
+test("server modules never reach for a bare global crypto (Node 18 does not expose one)", async () => {
+  const here = new URL("../src/", import.meta.url);
+  for (const file of ["provider.mjs", "engine.mjs", "store.mjs", "routines.mjs", "mentions.mjs"]) {
+    const source = await readFile(new URL(file, here), "utf8");
+    assert.ok(!/(^|[^.\w])crypto\.\w/.test(source.replaceAll("globalThis.crypto", "")),
+      `${file} ต้องใช้ uuid() แทน crypto ตัวโกลบอล`);
+  }
 });
