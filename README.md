@@ -1,5 +1,12 @@
 # BotWorkspace
 
+## Linux fork
+
+This fork now includes a runnable Linux workspace in [`LinuxWorkspace`](LinuxWorkspace).
+It is a local Node/browser application with no third-party packages; see the
+[Linux port boundary](docs/LINUX-PORT.md). The original SwiftUI/AppKit app below
+remains the macOS reference implementation.
+
 An independent, open-source native macOS workspace for named AI teammates.
 Built with **SwiftUI, AppKit and Core Data**, using only Apple frameworks.
 The repository name preserves its original [grok-clone idea capsule](PROPOSAL.md).
