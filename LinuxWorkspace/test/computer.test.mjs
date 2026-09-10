@@ -62,3 +62,8 @@ test("the handshake digest matches an independent sha1 implementation", () => {
   assert.equal(handshakeAccept("x3JJHMbDL1EzLkh9GBhXDw=="), "NehNes/zC1C01D7vDzNM9XwJGTo=");
   assert.equal(handshakeAccept("dGhlIHNhbXBsZSBub25jZQ=="), "tF+4yo8PvjWV9zMFht911yVrKKY=");
 });
+
+test("a refused action is reported as a client error, not a server fault", () => {
+  const error = new ComputerError("ไม่อนุญาต");
+  assert.equal(error.status, 400);
+});

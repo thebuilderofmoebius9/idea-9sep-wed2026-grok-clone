@@ -31,7 +31,7 @@ export-safe listing), routines with next-run scheduling, single-claim ticks,
 run-now and run history, a local bot template catalog, unread/read state,
 preferences, deletion plans and JSON export.
 
-Verified by the offline test suite (77 tests, run on Node 18 and Node 22) and by local fixture endpoints;
+Verified by the offline test suite (78 tests, run on Node 18 and Node 22) and by local fixture endpoints;
 no live third-party provider has been validated.
 
 The workspace is installable: it ships a web app manifest, icons and a

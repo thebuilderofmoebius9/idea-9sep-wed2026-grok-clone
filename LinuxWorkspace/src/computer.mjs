@@ -11,7 +11,12 @@ import { openSocket } from "./wsclient.mjs";
 export const COMPUTER_ACTIONS = ["navigate", "click", "type", "key", "scroll"];
 
 export class ComputerError extends Error {
-  constructor(message) { super(message); this.name = "ComputerError"; }
+  constructor(message) {
+    super(message);
+    this.name = "ComputerError";
+    // A refused action is the caller's mistake, not a server fault.
+    this.status = 400;
+  }
 }
 
 const fetchJSON = async (url, timeout = 5_000) => {
