@@ -31,7 +31,7 @@ export-safe listing), routines with next-run scheduling, single-claim ticks,
 run-now and run history, a local bot template catalog, unread/read state,
 preferences, deletion plans and JSON export.
 
-Verified by the offline test suite (71 tests, run on Node 18 and Node 22) and by local fixture endpoints;
+Verified by the offline test suite (77 tests, run on Node 18 and Node 22) and by local fixture endpoints;
 no live third-party provider has been validated.
 
 The workspace is installable: it ships a web app manifest, icons and a
@@ -50,6 +50,11 @@ destination host is pinned regardless of `apiRoot`, and the request is
 text-only (`tools: []`, `tool_choice: "none"`, `parallel_tool_calls: false`,
 `store: false`). It is experimental: it proves one account works, not an
 entitlement for every account or model.
+
+The computer panel is a real adapter now, not a placeholder: it drives one
+tunnelled Chrome DevTools tab under the permission policy in
+`docs/COMPUTER-ADAPTER.md` (loopback only, closed action set, human-driven, no
+bot access). Disconnected still renders as disconnected.
 
 Not ported: migration from the macOS Core Data store (dropped on the owner's
 instruction: import the fork's tools instead of writing an importer), and

@@ -391,6 +391,91 @@ function renderComposer() {
   $("#mention").hidden = active?.kind !== "group";
 }
 
+/// The computer panel shows only what the adapter reports. There is no
+/// placeholder screen: disconnected renders as disconnected.
+const computerState = { status: null, shotAt: 0, busy: false };
+
+async function refreshComputer({ shot = false } = {}) {
+  try {
+    computerState.status = await api("/api/computer");
+  } catch { computerState.status = null; }
+  if (shot && computerState.status?.connected) computerState.shotAt = Date.now();
+  renderComputer();
+}
+
+async function computerAction(action) {
+  if (computerState.busy) return;
+  computerState.busy = true;
+  try {
+    await api("/api/computer/action", { method: "POST", body: action });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await refreshComputer({ shot: true });
+  } catch (error) {
+    toast(error.message, { error: true });
+    await refreshComputer();
+  } finally { computerState.busy = false; }
+}
+
+function renderComputer() {
+  const host = $("#computer-panel");
+  if (!host) return;
+  host.replaceChildren();
+  const status = computerState.status;
+  if (!status?.connected) {
+    const endpoint = el("input", { value: "http://127.0.0.1:9224", "aria-label": "ปลายทาง DevTools" });
+    host.append(
+      el("p", { class: "muted small", text: "ยังไม่ได้เชื่อมต่อ — ต้องเปิด tunnel มาที่ 127.0.0.1 ของเครื่องนี้ก่อน แผงนี้คุมเฉพาะเบราว์เซอร์ที่เปิด DevTools ไว้ ไม่ใช่ทั้งเครื่อง" }),
+      field("ปลายทาง DevTools", endpoint),
+      el("button", {
+        class: "secondary", text: "เชื่อมต่อ",
+        onclick: async () => {
+          try {
+            computerState.status = await api("/api/computer/connect", { method: "POST", body: { devtools: endpoint.value } });
+            await refreshComputer({ shot: true });
+          } catch (error) { toast(error.message, { error: true }); }
+        },
+      }),
+    );
+    if (status?.lastError) host.append(el("p", { class: "small warn-text", text: `ข้อผิดพลาดล่าสุด: ${status.lastError}` }));
+    return;
+  }
+
+  const url = el("input", { value: status.target?.url ?? "", "aria-label": "ที่อยู่เว็บ" });
+  const text = el("input", { placeholder: "ข้อความที่จะพิมพ์ลงช่องที่โฟกัสอยู่", "aria-label": "ข้อความ" });
+  const shot = el("img", {
+    src: `/api/computer/screenshot?t=${computerState.shotAt}`,
+    alt: "หน้าจอของคอมพิวเตอร์ที่เชื่อมต่ออยู่",
+    style: "width:100%;border-radius:8px;cursor:crosshair",
+  });
+  // Click maps back to page coordinates through the rendered width.
+  shot.onclick = (event) => {
+    const box = shot.getBoundingClientRect();
+    const scale = shot.naturalWidth / box.width;
+    computerAction({ kind: "click", x: Math.round((event.clientX - box.left) * scale), y: Math.round((event.clientY - box.top) * scale) });
+  };
+  host.append(
+    el("p", { class: "small", text: `เชื่อมต่ออยู่ · ${status.target?.title ?? ""}` }),
+    el("p", { class: "muted small", text: status.scope }),
+    field("ที่อยู่เว็บ", url),
+    el("div", { class: "row" }, [
+      el("button", { class: "ghost", text: "เปิด", onclick: () => computerAction({ kind: "navigate", url: url.value }) }),
+      el("button", { class: "ghost", text: "รีเฟรชภาพ", onclick: () => refreshComputer({ shot: true }) }),
+      el("button", { class: "ghost", text: "ตัดการเชื่อมต่อ", onclick: async () => {
+        computerState.status = await api("/api/computer/disconnect", { method: "POST", body: {} });
+        renderComputer();
+      } }),
+    ]),
+    shot,
+    field("พิมพ์ข้อความ", text),
+    el("div", { class: "row" }, [
+      el("button", { class: "ghost", text: "พิมพ์", onclick: () => { computerAction({ kind: "type", text: text.value }); } }),
+      el("button", { class: "ghost", text: "Enter", onclick: () => computerAction({ kind: "key", key: "Enter" }) }),
+      el("button", { class: "ghost", text: "เลื่อนลง", onclick: () => computerAction({ kind: "scroll", deltaY: 400 }) }),
+      el("button", { class: "ghost", text: "เลื่อนขึ้น", onclick: () => computerAction({ kind: "scroll", deltaY: -400 }) }),
+    ]),
+  );
+}
+
 function renderInspector() {
   const active = conversation();
   const host = $("#routine-list");
@@ -1386,6 +1471,7 @@ function connectEvents() {
   navigator.serviceWorker?.register("/service-worker.js").catch(() => {});
   try {
     await refresh({ keepScroll: false });
+    await refreshComputer();
     wireDivider($("#divider-left"), "sidebarWidth", { min: 240, max: 400 });
     wireDivider($("#divider-right"), "inspectorWidth", { min: 280, max: 480, invert: true });
     connectEvents();

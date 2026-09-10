@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { WorkspaceStore, defaultStoreDirectory } from "./src/store.mjs";
 import { SessionCredentialStore, PROVIDER_PRESETS, CODEX_ENDPOINT } from "./src/provider.mjs";
 import { Engine } from "./src/engine.mjs";
+import { ComputerConnection } from "./src/computer.mjs";
 import { resolveMentions, displayNames, mentionToken } from "./src/mentions.mjs";
 import { nextRun } from "./src/routines.mjs";
 import { uuid, BOT_TEMPLATES, makeCodexReference, isCodexReference } from "./src/domain.mjs";
@@ -22,6 +23,8 @@ const types = {
 const store = new WorkspaceStore({ directory: process.env.BOTWORKSPACE_HOME ?? defaultStoreDirectory() });
 const credentials = new SessionCredentialStore();
 const engine = new Engine(store, credentials);
+// Human-driven only: nothing in the generation path can reach this object.
+const computer = new ComputerConnection();
 engine.startScheduler();
 
 /// Review plans live only in this process: a confirmation can never be replayed after a restart.
@@ -117,6 +120,7 @@ const routes = {
     presets: PROVIDER_PRESETS, botTemplates: BOT_TEMPLATES,
   }),
   "GET /api/presets": () => PROVIDER_PRESETS,
+  "GET /api/computer": () => computer.status(),
   "GET /api/bot-templates": () => BOT_TEMPLATES,
 };
 
@@ -321,6 +325,18 @@ async function handleAPI(request, response, url) {
   }
   if (key === "POST /api/routines/tick") {
     return json(response, 200, { started: await engine.tickRoutines(body.now ?? Date.now()) });
+  }
+
+  if (key === "POST /api/computer/connect") {
+    return json(response, 200, await computer.connect(body.devtools, { targetID: body.targetID ?? null }));
+  }
+  if (key === "POST /api/computer/disconnect") return json(response, 200, await computer.disconnect());
+  if (key === "POST /api/computer/action") return json(response, 200, await computer.act(body));
+  if (key === "GET /api/computer/info") return json(response, 200, await computer.info());
+  if (key === "GET /api/computer/screenshot") {
+    const png = await computer.screenshot();
+    response.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" }).end(png);
+    return;
   }
 
   if (key === "POST /api/preferences") return json(response, 200, store.savePreferences(body));
